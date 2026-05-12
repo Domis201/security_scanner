@@ -10,13 +10,15 @@ echo ""
 if ! command -v docker &> /dev/null; then
     echo "[1/5] Docker nerastas. Diegiamas..."
     apt-get update
-    apt-get install -y docker.io docker-compose-plugin
+    apt-get install -y docker.io
+    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
     systemctl enable docker
     systemctl start docker
 else
     echo "[1/5] Docker jau idiegtas."
 fi
-
 # Docker Compose check
 if ! docker compose version &> /dev/null; then
     echo "[2/5] Docker Compose nerastas. Diegiamas..."
