@@ -1,0 +1,137 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: scanner_db
+    environment:
+      MYSQL_DATABASE: scanner_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password123
+      MYSQL_ROOT_PASSWORD: rootpassword
+      TZ: Europe/Vilnius
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - scanner_network
+
+  redis:
+    image: redis:alpine
+    container_name: scanner_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - scanner_network
+
+  backend:
+    build: ./backend
+    container_name: scanner_backend
+    volumes:
+      - /home/domis/security_scanner/backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=scanner_db
+      - DB_USER=user
+      - DB_PASS=password123
+      - REDIS_URL=redis://redis:6379/0
+      - TZ=Europe/Vilnius
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      - db
+      - redis
+    networks:
+      - scanner_network
+
+  beat:
+    build: ./backend
+    container_name: scanner_beat
+    command: celery -A core beat --loglevel=info
+    volumes:
+      - /home/domis/security_scanner/backend:/app
+    environment:
+      - DB_HOST=127.0.0.1
+      - REDIS_URL=redis://localhost:6379/0
+      - TZ=Europe/Vilnius
+    network_mode: host
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    user: root
+    privileged: true
+    build: ./backend
+    container_name: scanner_worker
+    command: celery -A core worker --loglevel=info
+    volumes:
+      - /home/domis/security_scanner/backend:/app
+    environment:
+      - DB_HOST=127.0.0.1
+      - REDIS_URL=redis://localhost:6379/0
+      - OPENVAS_ADDRESS=127.0.0.1
+      - OPENVAS_USER=admin
+      - OPENVAS_PASSWORD=tavo_saugu_slaptazodis
+      - TZ=Europe/Vilnius
+    network_mode: host
+    depends_on:
+      - db
+      - redis
+      - openvas
+
+  # --- NAUJA DALIS: FRONTEND (REACT) ---
+  frontend:
+    build: ./frontend
+    container_name: scanner_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Apsaugo node_modules perrašymą iš host
+    stdin_open: true       # Reikalinga React development serveriui
+    tty: true
+    environment:
+      - TZ=Europe/Vilnius
+    depends_on:
+      - backend
+    networks:
+      - scanner_network
+
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: scanner_zap
+    user: root
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
+    ports:
+      - "8080:8080"
+    networks:
+      - scanner_network
+    profiles:
+      - zap
+
+  openvas:
+    image: immauss/openvas:latest
+    container_name: scanner_openvas
+    privileged: true
+    restart: on-failure
+    stop_grace_period: 2m
+    environment:
+      - PASSWORD=tavo_saugu_slaptazodis
+    ports:
+      - "9390:9390"
+      - "9392:9392"
+    volumes:
+      - openvas_data:/data
+    networks:
+      - scanner_network
+
+networks:
+  scanner_network:
+    driver: bridge
+
+volumes:
+  openvas_data:
+  db_data:

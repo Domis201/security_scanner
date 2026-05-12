@@ -1,0 +1,35 @@
+from django.urls import path
+from .views import (
+    login_view,
+    start_nmap_scan,
+    get_latest_results,
+    list_profiles,
+    create_profile,
+    start_profile_scan,
+    get_profile_results,
+    get_all_results,
+    stop_scan,
+    cancel_schedule,
+    password_reset_request,
+    password_reset_confirm,
+    user_profile,
+    delete_profile,
+)
+
+urlpatterns = [
+    path('login/', login_view, name='login'),
+    path('run-nmap/', start_nmap_scan, name='run_nmap'),
+    path('profiles/', list_profiles, name='list_profiles'),
+    path('profiles/create/', create_profile, name='create_profile'),
+    path('profiles/<int:profile_id>/scan/', start_profile_scan, name='start_profile_scan'),
+    path('profiles/<int:profile_id>/results/', get_profile_results, name='get_profile_results'),
+    path('profiles/<int:profile_id>/results/latest/', get_latest_results, name='get_latest_results'),
+    path('results/latest/', get_latest_results, name='get_latest_results_alias'),
+    path('results/', get_all_results, name='get_all_results'),
+    path('results/<int:result_id>/stop/', stop_scan, name='stop_scan'),
+    path('profiles/<int:profile_id>/cancel-schedule/', cancel_schedule, name='cancel_schedule'),
+    path('profiles/<int:profile_id>/delete/', delete_profile, name='delete_profile'),
+    path('password-reset/', password_reset_request, name='password_reset_request'),
+    path('password-reset/confirm/', password_reset_confirm, name='password_reset_confirm'),
+    path('user-profile/', user_profile, name='user_profile'),
+]

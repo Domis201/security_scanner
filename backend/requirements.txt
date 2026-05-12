@@ -1,0 +1,17 @@
+# Pagrindinis karkasas ir API (būtina React integracijai)
+django
+djangorestframework
+django-cors-headers
+
+# Duomenų bazė (MySQL jungtis)
+mysqlclient
+
+# Skenavimo įrankių bibliotekos
+python-nmap
+python-owasp-zap-v2.4
+python-gvm
+gvm-tools
+
+# Užduočių eilė ir fono procesai (FR 5.2)
+celery
+redis
