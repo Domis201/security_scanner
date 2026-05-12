@@ -9,7 +9,8 @@ echo ""
 # Docker check / install
 if ! command -v docker &> /dev/null; then
     echo "[1/5] Docker nerastas. Diegiamas..."
-    curl -fsSL https://get.docker.com | sh
+    apt-get update
+    apt-get install -y docker.io docker-compose-plugin
     systemctl enable docker
     systemctl start docker
 else
