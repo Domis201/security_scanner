@@ -137,7 +137,7 @@ def _run_openvas_scan(hosts, open_ports, scan_result=None, intensity='medium', o
             # Poll until done; max 10 min then force stop
             status = 'Running'
             report_id = None
-            max_polls = 120  # 120 × 5s = 10 min
+            max_polls = 360  # 360 × 5s = 30 min
             poll_count = 0
             while status not in ['Done', 'Stopped', 'Interrupted']:
                 time.sleep(5)
@@ -259,6 +259,9 @@ def _run_openvas_scan(hosts, open_ports, scan_result=None, intensity='medium', o
 def run_full_security_scan(self, profile_id, target):
     profile = ScanProfile.objects.get(id=profile_id)
 
+    from django.utils import timezone as tz
+    started_at = tz.now().isoformat()
+
     # Create result immediately so frontend shows scan started
     scan_result = ScanResult.objects.create(
         profile=profile,
@@ -269,6 +272,7 @@ def run_full_security_scan(self, profile_id, target):
             'openvas_progress': 0,
             'scan_status': 'running',
             'stage': 'nmap',
+            'started_at': started_at,
         },
     )
 
@@ -375,10 +379,20 @@ def run_full_security_scan(self, profile_id, target):
 
     scan_result.refresh_from_db()
     final_status = 'stopped' if scan_result.report_data.get('stop_requested') else 'completed'
+    completed_at = tz.now().isoformat()
+    started = scan_result.report_data.get('started_at', scan_result.created_at.isoformat())
+    from datetime import datetime
+    try:
+        delta = datetime.fromisoformat(completed_at) - datetime.fromisoformat(started)
+        duration = int(delta.total_seconds())
+    except Exception:
+        duration = None
     scan_result.report_data.update({
         'openvas': openvas_status,
         'openvas_progress': 100,
         'scan_status': final_status,
+        'completed_at': completed_at,
+        'duration_seconds': duration,
     })
     scan_result.save(update_fields=['report_data'])
 
