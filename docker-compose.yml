@@ -27,7 +27,7 @@ services:
     build: ./backend
     container_name: scanner_backend
     volumes:
-      - /home/domis/security_scanner/backend:/app
+      - ./backend:/app
     ports:
       - "8000:8000"
     environment:
@@ -51,7 +51,7 @@ services:
     container_name: scanner_beat
     command: celery -A core beat --loglevel=info
     volumes:
-      - /home/domis/security_scanner/backend:/app
+      - ./backend:/app
     environment:
       - DB_HOST=127.0.0.1
       - REDIS_URL=redis://localhost:6379/0
@@ -68,7 +68,7 @@ services:
     container_name: scanner_worker
     command: celery -A core worker --loglevel=info
     volumes:
-      - /home/domis/security_scanner/backend:/app
+      - ./backend:/app
     environment:
       - DB_HOST=127.0.0.1
       - REDIS_URL=redis://localhost:6379/0
