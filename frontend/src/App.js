@@ -996,7 +996,7 @@ function App() {
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
                 placeholder="Pvz. Naktinis skenavimas"
-                style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', border: '1px solid #d7dceb', background: '#fafbfc', fontSize: '0.98rem' }}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', border: '1px solid #d7dceb', background: '#fafbfc', fontSize: '0.98rem', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -1026,7 +1026,7 @@ function App() {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={scanMode === 'range' ? 'pvz. 192.168.1.1-192.168.1.20 arba 192.168.1.0/24' : 'pvz. scanme.nmap.org'}
-                style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', border: '1px solid #d7dceb', background: '#fafbfc', fontSize: '0.98rem' }}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', border: '1px solid #d7dceb', background: '#fafbfc', fontSize: '0.98rem', boxSizing: 'border-box' }}
               />
               <p style={{ marginTop: '10px', color: '#7b8a9a', fontSize: '0.95rem' }}>
                 {scanMode === 'range'
