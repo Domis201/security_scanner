@@ -392,7 +392,7 @@ function VykdymasTab({ authHeaders }) {
               <div>
                 <h3 style={{ margin: 0, color: '#1a1f36' }}>{rd.target}</h3>
                 <p style={{ margin: '4px 0 0', color: '#7b8a9a', fontSize: '0.9rem' }}>
-                  {stage === 'nmap' ? '⏳ Nmap skenavimas vykdomas...' : `⏳ OpenVAS skenavimas... ${openvasProgress}%`}
+                  {stage === 'nmap' ? 'Nmap skenavimas vykdomas...' : `OpenVAS skenavimas... ${openvasProgress}%`}
                 </p>
                 <p style={{ margin: '2px 0 0', color: '#aab', fontSize: '0.82rem' }}>
                   Pradėta: {new Date(r.created_at).toLocaleString('lt-LT')}
@@ -685,9 +685,9 @@ function IstorijaTab({ authHeaders, onViewResult }) {
                   </td>
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{rd.target || '—'}</td>
                   <td style={{ padding: '12px 16px', color: '#7b8a9a', fontSize: '0.85rem' }}>
-                    <div>▶ {new Date(rd.started_at || r.created_at).toLocaleString('lt-LT')}</div>
-                    {rd.completed_at && <div>■ {new Date(rd.completed_at).toLocaleString('lt-LT')}</div>}
-                    <div style={{ color: '#1f77d0' }}>⏱ {duration}</div>
+                    <div>Pradeta: {new Date(rd.started_at || r.created_at).toLocaleString('lt-LT')}</div>
+                    {rd.completed_at && <div>Baigta: {new Date(rd.completed_at).toLocaleString('lt-LT')}</div>}
+                    <div style={{ color: '#1f77d0' }}>Trukme: {duration}</div>
                   </td>
                   <td style={{ padding: '12px 16px' }}>{openPorts}</td>
                   <td style={{ padding: '12px 16px' }}>{vulnCount} radinių</td>
@@ -881,16 +881,9 @@ function App() {
     }
   };
 
-  const handleStartScan = async () => {
-    if (!target) {
-      setStatusMessage('Įveskite tikslinį IP adresą ar intervalą.');
-      return;
-    }
-
-    setLoading(true);
-    setResults({ hosts: [], openvas: {} });
-    setStatusMessage('Kuriamas profilis ir siunčiamas skenavimas...');
-
+  const handleSaveProfile = async () => {
+    if (!target) { setStatusMessage('Įveskite tikslinį IP adresą ar intervalą.'); return; }
+    setStatusMessage('Saugomas profilis...');
     try {
       const response = await fetch(`${API_BASE}/profiles/create/`, {
         method: 'POST',
@@ -898,28 +891,27 @@ function App() {
         body: JSON.stringify({ name: profileName, target_ip: target, intensity, use_openvas: useOpenvas, nmap_version_scan: nmapVersionScan, openvas_config: openvasConfig, schedule, schedule_time: scheduleTime, schedule_weekday: scheduleWeekday }),
       });
       const profileResponse = await response.json();
-
-      if (!response.ok) {
-        setStatusMessage(profileResponse.message || 'Nepavyko sukurti profilio.');
-        setLoading(false);
-        return;
-      }
-
-      const profileId = profileResponse.profile_id;
-      setSelectedProfileId(profileId);
-      setSelectedProfile(profileResponse.profile);
+      if (!response.ok) { setStatusMessage(profileResponse.message || 'Nepavyko sukurti profilio.'); return; }
       setProfiles((prev) => [profileResponse.profile, ...prev]);
+      setStatusMessage('Profilis išsaugotas.');
+      setProfileName('Greitas profilio skenavimas');
+      setTarget('');
+    } catch (err) {
+      setStatusMessage('Klaida išsaugant profilį.');
+    }
+  };
 
-      if (runNow) {
-        await fetch(`${API_BASE}/profiles/${profileId}/scan/`, { method: 'POST', headers: authHeaders });
-        setActiveTab('vykdymas');
-        setStatusMessage('Skenavimas pradėtas. Laukiama rezultatų...');
-      } else {
-        setActiveTab('vykdymas');
-        setStatusMessage('Profilis išsaugotas. Skenavimas bus pradėtas pagal tvarkaraštį.');
-        setLoading(false);
-        return;
-      }
+  const handleStartScanWithProfile = async (profileId) => {
+    setSelectedProfileId(profileId);
+    const profile = profiles.find(p => p.id === profileId);
+    setSelectedProfile(profile);
+    setLoading(true);
+    setResults({ hosts: [], openvas: {} });
+
+    try {
+      await fetch(`${API_BASE}/profiles/${profileId}/scan/`, { method: 'POST', headers: authHeaders });
+      setActiveTab('vykdymas');
+      setStatusMessage('Skenavimas pradėtas. Laukiama rezultatų...');
       
       // Poll for results - keep polling for up to 5 minutes
       let pollCount = 0;
@@ -1116,20 +1108,11 @@ function App() {
               )}
             </div>
 
-            {schedule !== 'none' && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: '#5c6d85' }}>
-                <input type="checkbox" checked={runNow} onChange={e => setRunNow(e.target.checked)}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-                Paleisti skenavimą dabar (taip pat)
-              </label>
-            )}
-
             <button
-              onClick={handleStartScan}
-              disabled={loading}
+              onClick={handleSaveProfile}
               style={{ width: '100%', padding: '16px', borderRadius: '16px', border: 'none', background: '#1f77d0', color: '#fff', fontWeight: '700', fontSize: '1rem', cursor: 'pointer' }}
             >
-              {loading ? 'Skenuojama...' : schedule !== 'none' && !runNow ? 'Išsaugoti tvarkaraštį' : 'Startuoti skenavimą'}
+              Issaugoti profili
             </button>
           </div>
         </div>
@@ -1218,17 +1201,29 @@ function App() {
                 </button>
               )}
             </div>
-            <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #d7dceb', borderRadius: '14px', background: '#fafbfc' }}>
+            <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {profiles.length === 0 && <p style={{ color: '#7b8a9a', textAlign: 'center', padding: '20px' }}>Nera profiliu. Sukurkite nauja.</p>}
               {profiles.map((profile) => (
-                <div key={profile.id} onClick={() => { handleProfileSelect({ target: { value: String(profile.id) } }); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderBottom: '1px solid #f0f4fa', cursor: 'pointer',
-                    background: String(selectedProfileId) === String(profile.id) ? '#eef4ff' : 'transparent' }}>
+                <div key={profile.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e0e7f0', background: '#fafbfc' }}>
                   <input type="checkbox" checked={checkedProfiles.includes(profile.id)}
-                    onClick={e => e.stopPropagation()}
                     onChange={e => setCheckedProfiles(prev => e.target.checked ? [...prev, profile.id] : prev.filter(x => x !== profile.id))}
                     style={{ cursor: 'pointer' }} />
-                  <span style={{ fontWeight: 600, color: '#1a1f36', fontSize: '0.9rem' }}>{profile.name}</span>
-                  <span style={{ color: '#7b8a9a', fontSize: '0.85rem' }}>· {profile.target_ip}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: '#1a1f36', fontSize: '0.9rem' }}>{profile.name}</div>
+                    <div style={{ color: '#7b8a9a', fontSize: '0.82rem' }}>{profile.target_ip} · {profile.intensity} · {profile.openvas_config}</div>
+                    {profile.schedule !== 'none' && <div style={{ color: '#1f77d0', fontSize: '0.8rem' }}>{profile.schedule === 'hourly' ? 'Kas valanda' : profile.schedule === 'daily' ? 'Kas diena' : 'Kas savaite'} {profile.schedule_time}</div>}
+                  </div>
+                  <button onClick={() => handleStartScanWithProfile(profile.id)}
+                    style={{ padding: '7px 14px', borderRadius: '9px', border: 'none', background: '#1f77d0', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                    Skenuoti
+                  </button>
+                  <button onClick={async () => {
+                    if (!window.confirm('Istrinti profili?')) return;
+                    await fetch(`${API_BASE}/profiles/${profile.id}/delete/`, { method: 'DELETE', headers: authHeaders });
+                    setProfiles(prev => prev.filter(p => p.id !== profile.id));
+                  }} style={{ padding: '7px 10px', borderRadius: '9px', border: '1px solid #e74c3c', background: '#fff', color: '#e74c3c', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    Trinti
+                  </button>
                 </div>
               ))}
             </div>

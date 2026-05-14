@@ -2,7 +2,7 @@ import os
 import time
 import subprocess
 import xml.etree.ElementTree as ET
-from datetime import timedelta
+from datetime import timedelta, datetime
 from celery import shared_task
 from celery.utils.log import get_task_logger
 import nmap
@@ -261,6 +261,7 @@ def run_full_security_scan(self, profile_id, target):
 
     from django.utils import timezone as tz
     started_at = tz.now().isoformat()
+    scan_start_time = time.time()
 
     # Create result immediately so frontend shows scan started
     scan_result = ScanResult.objects.create(
@@ -278,8 +279,13 @@ def run_full_security_scan(self, profile_id, target):
 
     self.update_state(state='PROGRESS', meta={'percent': 10, 'status': 'Nmap paleidžiamas...'})
 
+    nmap_started_at = tz.now().isoformat()
+    nmap_start_time = time.time()
+    scan_result.report_data['nmap_started_at'] = nmap_started_at
+    scan_result.save(update_fields=['report_data'])
+
     nm = nmap.PortScanner()
-    nmap_args = ['-Pn', '-T4', '-F', '--host-timeout', '60s']
+    nmap_args = ['-Pn', '-T4', '--host-timeout', '300s']
     if profile.nmap_version_scan:
         nmap_args.append('-sV')
     nmap_proc = subprocess.Popen(
@@ -306,6 +312,12 @@ def run_full_security_scan(self, profile_id, target):
     xml_output, _ = nmap_proc.communicate()
     nm.analyse_nmap_xml_scan(xml_output.decode('utf-8', errors='ignore'))
 
+    nmap_completed_at = tz.now().isoformat()
+    nmap_duration = int(time.time() - nmap_start_time)
+    scan_result.report_data['nmap_completed_at'] = nmap_completed_at
+    scan_result.report_data['nmap_duration_seconds'] = nmap_duration
+    scan_result.save(update_fields=['report_data'])
+
     hosts_report = []
     all_open_ports = []
     all_hosts = nm.all_hosts()
@@ -315,11 +327,16 @@ def run_full_security_scan(self, profile_id, target):
         for proto in nm[host].all_protocols():
             for port in nm[host][proto].keys():
                 service = nm[host][proto][port]
+                version_parts = filter(None, [
+                    service.get('product', ''),
+                    service.get('version', ''),
+                    service.get('extrainfo', ''),
+                ])
                 port_item = {
                     'port': port,
                     'service': service.get('name', 'unknown'),
                     'state': service.get('state', 'unknown'),
-                    'version': service.get('version', ''),
+                    'version': ' '.join(version_parts),
                     'vulnerability': 'Atviras portas' if service.get('state') == 'open' else 'Saugus',
                 }
                 host_ports.append(port_item)
@@ -360,6 +377,8 @@ def run_full_security_scan(self, profile_id, target):
             'openvas': {'status': 'skipped', 'message': 'OpenVAS išjungtas.', 'vulnerabilities': []},
             'openvas_progress': 100,
             'scan_status': 'completed',
+            'completed_at': tz.now().isoformat(),
+            'duration_seconds': int(time.time() - scan_start_time),
         })
         scan_result.save(update_fields=['report_data'])
         return f'Skenavimas baigtas (tik Nmap). Rasta portų: {len(all_open_ports)}'
@@ -380,13 +399,7 @@ def run_full_security_scan(self, profile_id, target):
     scan_result.refresh_from_db()
     final_status = 'stopped' if scan_result.report_data.get('stop_requested') else 'completed'
     completed_at = tz.now().isoformat()
-    started = scan_result.report_data.get('started_at', scan_result.created_at.isoformat())
-    from datetime import datetime
-    try:
-        delta = datetime.fromisoformat(completed_at) - datetime.fromisoformat(started)
-        duration = int(delta.total_seconds())
-    except Exception:
-        duration = None
+    duration = int(time.time() - scan_start_time)
     scan_result.report_data.update({
         'openvas': openvas_status,
         'openvas_progress': 100,
