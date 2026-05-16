@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 class ScanProfile(models.Model):
     OPENVAS_CONFIGS = [
@@ -25,7 +26,14 @@ class ScanProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 # Įsitikink, kad pavadinimas sutampa su tuo, ko ieško admin.py
-class ScanResult(models.Model): 
+class ScanResult(models.Model):
     profile = models.ForeignKey(ScanProfile, on_delete=models.CASCADE)
     report_data = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LoginAttempt(models.Model):
+    ip_address = models.CharField(max_length=45)
+    username = models.CharField(max_length=150)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    success = models.BooleanField(default=False)

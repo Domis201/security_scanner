@@ -16,13 +16,67 @@ from django.core.exceptions import ObjectDoesNotExist
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def register_view(request):
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    username = request.data.get('username', '').strip()
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
+    if not username or not password or not email:
+        return Response({'error': 'Visi laukai privalomi'}, status=400)
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Toks vartotojas jau egzistuoja'}, status=400)
+    if User.objects.filter(email=email).exists():
+        return Response({'error': 'Toks el. paštas jau naudojamas'}, status=400)
+    try:
+        validate_password(password)
+    except DjangoValidationError as e:
+        return Response({'error': ' '.join(e.messages)}, status=400)
+    user = User.objects.create_user(username=username, email=email, password=password)
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({'token': token.key})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def login_view(request):
-    username = request.data.get('username')
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import LoginAttempt
+    from django.conf import settings
+
+    login_input = request.data.get('username', '').strip()
     password = request.data.get('password')
+    ip = request.META.get('REMOTE_ADDR', '')
+
+    # SR-11: Tikrinti užrakinimą
+    lockout_window = timezone.now() - timedelta(minutes=getattr(settings, 'LOGIN_LOCKOUT_MINUTES', 10))
+    recent_fails = LoginAttempt.objects.filter(
+        ip_address=ip, success=False, timestamp__gte=lockout_window
+    ).count()
+    if recent_fails >= getattr(settings, 'LOGIN_ATTEMPT_LIMIT', 5):
+        return Response({'error': 'Paskyra laikinai užrakinta. Bandykite po 10 min.'}, status=429)
+
+    # Allow login with email or username
+    if '@' in login_input:
+        try:
+            username = User.objects.get(email=login_input).username
+        except User.DoesNotExist:
+            LoginAttempt.objects.create(ip_address=ip, username=login_input, success=False)
+            return Response({'error': 'Neteisingas el. paštas arba slaptažodis'}, status=401)
+    else:
+        username = login_input
+
     user = authenticate(username=username, password=password)
     if user:
-        token, _ = Token.objects.get_or_create(user=user)
+        LoginAttempt.objects.create(ip_address=ip, username=username, success=True)
+        # SR-07: Atnaujinti token (pašalinti seną, sukurti naują)
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
         return Response({'token': token.key})
+
+    LoginAttempt.objects.create(ip_address=ip, username=username, success=False)
     return Response({'error': 'Neteisingas vartotojas arba slaptažodis'}, status=401)
 
 
@@ -90,6 +144,40 @@ def create_profile(request):
     )
 
     return Response({'status': 'success', 'profile_id': profile.id, 'profile': serialize_profile(profile)})
+
+@api_view(['PUT'])
+def update_profile(request, profile_id):
+    try:
+        profile = ScanProfile.objects.get(id=profile_id)
+    except ScanProfile.DoesNotExist:
+        return Response({'error': 'Not found'}, status=404)
+
+    profile.name = request.data.get('name', profile.name)
+    profile.target_ip = request.data.get('target_ip', profile.target_ip)
+    profile.intensity = request.data.get('intensity', profile.intensity)
+    profile.use_openvas = request.data.get('use_openvas', profile.use_openvas)
+    profile.nmap_version_scan = request.data.get('nmap_version_scan', profile.nmap_version_scan)
+    profile.openvas_config = request.data.get('openvas_config', profile.openvas_config)
+    schedule = request.data.get('schedule', profile.schedule)
+    profile.schedule = schedule
+    profile.schedule_time = request.data.get('schedule_time', profile.schedule_time)
+    profile.schedule_weekday = request.data.get('schedule_weekday', profile.schedule_weekday)
+
+    if schedule != 'none':
+        from django.utils import timezone
+        from scanners.tasks import _next_run
+        from types import SimpleNamespace
+        profile.next_run_at = _next_run(SimpleNamespace(
+            schedule=schedule,
+            schedule_time=profile.schedule_time,
+            schedule_weekday=profile.schedule_weekday
+        ), timezone.now())
+    else:
+        profile.next_run_at = None
+
+    profile.save()
+    return Response({'status': 'success', 'profile': serialize_profile(profile)})
+
 
 @api_view(['POST'])
 def start_profile_scan(request, profile_id):
@@ -222,6 +310,13 @@ def password_reset_confirm(request):
 
     if not default_token_generator.check_token(user, token):
         return Response({'error': 'Neteisingas arba pasibaigęs tokenas'}, status=400)
+
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    try:
+        validate_password(new_password, user=user)
+    except DjangoValidationError as e:
+        return Response({'error': ' '.join(e.messages)}, status=400)
 
     user.set_password(new_password)
     user.save()

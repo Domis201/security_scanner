@@ -81,9 +81,12 @@ function LoginForm({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [view, setView] = useState('login'); // login | forgot | reset | done
+  const [view, setView] = useState('login'); // login | register | forgot | reset | done
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState('');
+  const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
 
   const params = new URLSearchParams(window.location.search);
   const resetUid = params.get('reset_uid');
@@ -162,16 +165,44 @@ function LoginForm({ onLogin }) {
         {view === 'login' && <>
           <h2 style={{ margin: '0 0 24px', color: '#1a1f36' }}>Prisijungimas</h2>
           <form onSubmit={handleSubmit}>
-            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Vartotojas" style={inputStyle} />
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Vartotojas arba el. paštas" style={inputStyle} />
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Slaptažodis" style={{ ...inputStyle, marginBottom: '8px' }} />
             {error && <p style={{ color: '#c0392b', marginBottom: '12px' }}>{error}</p>}
             <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', background: '#1f77d0', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', marginBottom: '12px' }}>
               Prisijungti
             </button>
           </form>
-          <button onClick={() => setView('forgot')} style={{ background: 'none', border: 'none', color: '#1f77d0', cursor: 'pointer', fontSize: '0.9rem' }}>
-            Pamiršote slaptažodį?
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <button onClick={() => setView('register')} style={{ background: 'none', border: 'none', color: '#1f77d0', cursor: 'pointer', fontSize: '0.9rem' }}>
+              Registruotis
+            </button>
+            <button onClick={() => setView('forgot')} style={{ background: 'none', border: 'none', color: '#7b8a9a', cursor: 'pointer', fontSize: '0.9rem' }}>
+              Pamiršote slaptažodį?
+            </button>
+          </div>
+        </>}
+
+        {view === 'register' && <>
+          <h2 style={{ margin: '0 0 24px', color: '#1a1f36' }}>Registracija</h2>
+          <form onSubmit={async e => {
+            e.preventDefault(); setError('');
+            const res = await fetch(`${API_BASE}/register/`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: regUsername, email: regEmail, password: regPassword }),
+            });
+            const data = await res.json();
+            if (data.token) { localStorage.setItem('auth_token', data.token); onLogin(data.token); }
+            else setError(data.error || 'Klaida');
+          }}>
+            <input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="Vartotojo vardas" style={inputStyle} />
+            <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="El. paštas" style={inputStyle} />
+            <input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Slaptažodis" style={{ ...inputStyle, marginBottom: '8px' }} />
+            {error && <p style={{ color: '#c0392b', marginBottom: '12px' }}>{error}</p>}
+            <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', background: '#1f77d0', color: '#fff', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', marginBottom: '12px' }}>
+              Registruotis
+            </button>
+          </form>
+          <button onClick={() => setView('login')} style={{ background: 'none', border: 'none', color: '#7b8a9a', cursor: 'pointer', fontSize: '0.9rem' }}>← Atgal</button>
         </>}
 
         {view === 'forgot' && <>
@@ -814,6 +845,7 @@ function App() {
   const [scanMode, setScanMode] = useState('single');
   const [useOpenvas, setUseOpenvas] = useState(true);
   const [nmapVersionScan, setNmapVersionScan] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(null);
   const [openvasConfig, setOpenvasConfig] = useState('base');
   const [schedule, setSchedule] = useState('none');
   const [scheduleTime, setScheduleTime] = useState('08:00');
@@ -1217,6 +1249,10 @@ function App() {
                     style={{ padding: '7px 14px', borderRadius: '9px', border: 'none', background: '#1f77d0', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                     Skenuoti
                   </button>
+                  <button onClick={() => setEditingProfile({...profile})}
+                    style={{ padding: '7px 10px', borderRadius: '9px', border: '1px solid #1f77d0', background: '#fff', color: '#1f77d0', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    Redaguoti
+                  </button>
                   <button onClick={async () => {
                     if (!window.confirm('Istrinti profili?')) return;
                     await fetch(`${API_BASE}/profiles/${profile.id}/delete/`, { method: 'DELETE', headers: authHeaders });
@@ -1230,6 +1266,70 @@ function App() {
           </div>
         </div>
       </section>
+
+      {editingProfile && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={() => setEditingProfile(null)}>
+          <div style={{ background: '#fff', borderRadius: '20px', padding: '28px', maxWidth: '480px', width: '100%', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#1a1f36' }}>Redaguoti profili</h3>
+              <button onClick={() => setEditingProfile(null)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#7b8a9a' }}>x</button>
+            </div>
+            {[
+              { label: 'Pavadinimas', key: 'name', type: 'text' },
+              { label: 'Tikslo IP', key: 'target_ip', type: 'text' },
+            ].map(({ label, key, type }) => (
+              <div key={key} style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#5c6d85', fontWeight: 600, fontSize: '0.9rem' }}>{label}</label>
+                <input type={type} value={editingProfile[key] || ''} onChange={e => setEditingProfile(p => ({ ...p, [key]: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid #d7dceb', boxSizing: 'border-box', fontSize: '0.95rem' }} />
+              </div>
+            ))}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#5c6d85', fontWeight: 600, fontSize: '0.9rem' }}>Intensyvumas</label>
+              <select value={editingProfile.intensity} onChange={e => setEditingProfile(p => ({ ...p, intensity: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid #d7dceb', fontSize: '0.95rem' }}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#5c6d85', fontWeight: 600, fontSize: '0.9rem' }}>OpenVAS konfiguracija</label>
+              <select value={editingProfile.openvas_config} onChange={e => setEditingProfile(p => ({ ...p, openvas_config: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid #d7dceb', fontSize: '0.95rem' }}>
+                <option value="base">Base</option>
+                <option value="discovery">Discovery</option>
+                <option value="full_and_fast">Full and fast</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#5c6d85', fontSize: '0.9rem' }}>
+                <input type="checkbox" checked={editingProfile.use_openvas} onChange={e => setEditingProfile(p => ({ ...p, use_openvas: e.target.checked }))} />
+                OpenVAS
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#5c6d85', fontSize: '0.9rem' }}>
+                <input type="checkbox" checked={editingProfile.nmap_version_scan} onChange={e => setEditingProfile(p => ({ ...p, nmap_version_scan: e.target.checked }))} />
+                Nmap -sV
+              </label>
+            </div>
+            <button onClick={async () => {
+              const res = await fetch(`${API_BASE}/profiles/${editingProfile.id}/update/`, {
+                method: 'PUT', headers: authHeaders,
+                body: JSON.stringify(editingProfile),
+              });
+              const data = await res.json();
+              if (data.status === 'success') {
+                setProfiles(prev => prev.map(p => p.id === editingProfile.id ? data.profile : p));
+                setEditingProfile(null);
+              }
+            }} style={{ width: '100%', padding: '13px', borderRadius: '12px', border: 'none', background: '#1f77d0', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              Issaugoti
+            </button>
+          </div>
+        </div>
+      )}
 
       <section>
         <h2 style={{ marginBottom: '18px', color: '#1a1f36' }}>Rezultatai pagal IP / intervalą</h2>

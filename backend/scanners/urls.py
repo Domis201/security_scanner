@@ -14,10 +14,13 @@ from .views import (
     password_reset_confirm,
     user_profile,
     delete_profile,
+    update_profile,
+    register_view,
 )
 
 urlpatterns = [
     path('login/', login_view, name='login'),
+    path('register/', register_view, name='register'),
     path('run-nmap/', start_nmap_scan, name='run_nmap'),
     path('profiles/', list_profiles, name='list_profiles'),
     path('profiles/create/', create_profile, name='create_profile'),
@@ -28,6 +31,7 @@ urlpatterns = [
     path('results/', get_all_results, name='get_all_results'),
     path('results/<int:result_id>/stop/', stop_scan, name='stop_scan'),
     path('profiles/<int:profile_id>/cancel-schedule/', cancel_schedule, name='cancel_schedule'),
+    path('profiles/<int:profile_id>/update/', update_profile, name='update_profile'),
     path('profiles/<int:profile_id>/delete/', delete_profile, name='delete_profile'),
     path('password-reset/', password_reset_request, name='password_reset_request'),
     path('password-reset/confirm/', password_reset_confirm, name='password_reset_confirm'),

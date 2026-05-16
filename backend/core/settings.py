@@ -46,11 +46,20 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'scanners.authentication.ExpiringTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # SR-14: Rate limiting (DoS apsauga)
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '20/min',
+        'user': '120/min',
+    },
 }
 
 MIDDLEWARE = [
@@ -109,12 +118,16 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 12},
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+    {
+        'NAME': 'scanners.validators.ComplexPasswordValidator',
     },
 ]
 
@@ -159,6 +172,14 @@ CELERY_BEAT_SCHEDULE = {
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# SR-07: Token galiojimo laikas (24 valandos)
+from datetime import timedelta
+TOKEN_EXPIRY_HOURS = 24
+
+# SR-11: Paskyros užrakinimas po 5 nesėkmingų bandymų per 10 min
+LOGIN_ATTEMPT_LIMIT = 5
+LOGIN_LOCKOUT_MINUTES = 10
 
 # Leisk React frontend'ui kreiptis į API
 CORS_ALLOWED_ORIGINS = [
